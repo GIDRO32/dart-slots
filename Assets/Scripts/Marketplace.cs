@@ -133,24 +133,29 @@ void UpdateShopUI()
 
 public void ResetPurchases()
 {
-    PurchasedSkins.Clear();
     for (int i = 0; i < ShopItemList.Count; i++)
     {
-        ShopItemList[i].isAvailable = false;  // Make items unavailable
-        PlayerPrefs.SetInt("ItemAvailable_" + i, 0);  // Reset PlayerPrefs state
+        ShopItemList[i].isAvailable = false;
+        PlayerPrefs.SetInt("ItemAvailable_" + i, 0);
 
-        // Update UI immediately
-        Transform itemTransform = StoreSurf.GetChild(i);
-        Button buyButton = itemTransform.GetChild(3).GetComponent<Button>();  // Assuming button is at index 3
-        buyButton.interactable = true;
-        buyButton.transform.GetChild(0).GetComponent<Text>().text = "Buy";  // Update button text
+        // Ensure the transform child exists before trying to access it
+        if (i < StoreSurf.childCount)
+        {
+            Transform itemTransform = StoreSurf.GetChild(i);
+            Button buyButton = itemTransform.GetChild(3).GetComponent<Button>();  // Ensure the button is at index 3
+            if (buyButton != null)
+            {
+                buyButton.interactable = true;
+                buyButton.transform.GetChild(0).GetComponent<Text>().text = "Buy";
+            }
+        }
     }
 
-    PlayerPrefs.SetInt("Total", 2000);  // Reset coin balance
-    PlayerPrefs.Save();  // Save changes to PlayerPrefs
-
-    UpdateShopUI();  // Refresh the UI if necessary
+    PlayerPrefs.SetInt("Total", 2000); // Resetting the coin balance
+    PlayerPrefs.Save();
+    // UpdateShopUI(); // Refresh the UI to reflect the changes
 }
+
 
 
 void DisableBuyButton(Button buyButton)

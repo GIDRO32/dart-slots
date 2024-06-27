@@ -7,6 +7,7 @@ public class Product : MonoBehaviour
     public int Coins;
     #region Singleton:Product
     public static Product Instance;
+    public LevelHandle levelHandle;
     void Awake()
     {
         if(Instance == null)

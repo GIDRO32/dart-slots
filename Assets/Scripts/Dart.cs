@@ -6,6 +6,7 @@ using System;
 public class Dart : MonoBehaviour
 {
     private DartSlot dartSlot;
+    private LevelHandle levelHandle;
     private Rigidbody2D rb;
     public float[] xPositions = {-1.2f,0,1.2f};  // Array of X positions corresponding to slot positions
     private HashSet<float> hitRows = new HashSet<float>();
@@ -21,12 +22,21 @@ public class Dart : MonoBehaviour
         GetComponent<Collider2D>().isTrigger = true;
         spriteRenderer = GetComponent<SpriteRenderer>();
     }
+    public void Initialize2(LevelHandle dartSlotReference, float[] positions)
+    {
+        levelHandle = dartSlotReference;
+        xPositions = positions;
+        rb = gameObject.GetComponent<Rigidbody2D>() ?? gameObject.AddComponent<Rigidbody2D>();
+        rb.gravityScale = 0;
+        rb.isKinematic = true;
+        GetComponent<Collider2D>().isTrigger = true;
+        spriteRenderer = GetComponent<SpriteRenderer>();
+    }
 
 private void OnTriggerEnter2D(Collider2D collision)
 {
     if (collision.CompareTag("Icon")) 
     {
-        StopCoroutine(FadeOutAndDestroy());  // Stop any ongoing fade out
         GetComponent<Collider2D>().enabled = false;  // Disable the collider immediately upon hitting an icon
 
         SpriteRenderer collidedIconSpriteRenderer = collision.GetComponent<SpriteRenderer>();
@@ -40,7 +50,20 @@ private void OnTriggerEnter2D(Collider2D collision)
             dartSlot.RegisterHitRow(collision.transform.position.y);
         }
     }
-    else if(collision.CompareTag("Area") && collision.CompareTag("Area"))
+    else if(collision.CompareTag("LevelIcon"))
+    {
+        GetComponent<Collider2D>().enabled = false;  // Disable the collider immediately upon hitting an icon
+        SpriteRenderer collidedIconSpriteRenderer = collision.GetComponent<SpriteRenderer>();
+        if(collidedIconSpriteRenderer != null && levelHandle.CanHitRow(collision.transform.position.y))
+        {
+            Sprite collidedSprite = collidedIconSpriteRenderer.sprite;
+            levelHandle.ProcessHitIcon(collidedSprite);  // Process the icon that was hit
+            float closestPosition = FindClosestXPosition(collision.transform.position.x);
+            levelHandle.StopAllSlots(closestPosition);
+            levelHandle.RegisterHitRow(collision.transform.position.y);
+        }
+    }
+    else if(collision.CompareTag("Area"))
     {
         Debug.Log("Miss!");
     }

@@ -7,6 +7,7 @@ TagManager:
   - Dart
   - Icon
   - Area
+  - LevelIcon
   layers:
   - Default
   - TransparentFX

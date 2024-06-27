@@ -4,7 +4,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class DartSlot : MonoBehaviour
+public class LevelHandle : MonoBehaviour
 {
     public GameObject slotPrefab;  // The Slot prefab to be instantiated
     public Sprite[] icons;         // Array of sprites to be used as icons
@@ -15,7 +15,7 @@ public class DartSlot : MonoBehaviour
 
     public float[] spawnPositionsX = { -1.5f, 0f, 1.5f };  // Array of X positions for spawning
 
-    private List<SlotMover> activeSlots = new List<SlotMover>();  // List to keep track of active slots
+    private List<SlotSpinner> activeSlots = new List<SlotSpinner>();  // List to keep track of active slots
     private Dictionary<float, Coroutine> spawnCoroutines = new Dictionary<float, Coroutine>();  // Reference to the spawn coroutines for each X position
 public GameObject targetCircle;  // Reference to the target circle
 public GameObject dartPrefab;    // Reference to the dart prefab
@@ -26,25 +26,23 @@ public Vector2 targetCircleBounds = new Vector2(-3f, 3f);  // Bounds for target 
 private bool isMovingRight = true;  // Direction flag for the target circle
 private HashSet<float> hitRows = new HashSet<float>();
 
-    public int freeDarts = 3;
-    public int dartPrice = 30;
-    public int coins = 1000;
-    public Text balance;
     public GameObject BasicGame;
     public GameObject Starter;
-    public string diff_mark;
-    public int gameprice;
-    public int multiplier;
-    private int winnings;
     public GameObject[] boxes = new GameObject[3];  // Array to store references to the box sprites
     public GameObject resultsPopup;  // Reference to the results popup GameObject
     private int hits = 0;  // Track the number of successful hits
-    public int[] iconValues = { 100, 150, 200, 250, 300 };
     public List<SpriteRenderer> boxRenderers;  // List to store references to the box sprite renderers
     public List<Sprite> hitIcons = new List<Sprite>();
     public Text result_text;
     public List<Sprite> dartSkins = new List<Sprite>(); // List to hold purchased dart skins
     public Sprite defaultDartSkin; // Default dart skin
+    public Button[] levelButtons;
+public Sprite[] icon_objectives;
+public GameObject objectivePopup;  // Popup that shows the level objective
+public Image objectiveIcon;  // Icon displayed in the objective popup
+public Sprite currentObjectiveIcon; // Variable to hold the current level's objective icon
+public AudioSource sound_effects;
+public AudioClip jingle;
 
 private void Start()
     {
@@ -55,21 +53,6 @@ private void Start()
         foreach (float xPos in spawnPositionsX)
         {
             spawnCoroutines[xPos] = StartCoroutine(SpawnSlots(xPos));
-        }
-        coins = PlayerPrefs.GetInt("Total", coins);
-    }
-    void Update()
-    {
-        balance.text = coins.ToString();
-        if(coins < dartPrice && freeDarts == 0)
-        {
-            result_text.text = "No coins left\nTry lower difficulty";
-            ShowResultsPopup();
-        }
-        else if(coins < dartPrice && freeDarts == 0 && diff_mark == "Easy")
-        {
-            result_text.text = "No free darts left\nTry again";
-            ShowResultsPopup();
         }
     }
 void LoadPurchasedSkins()
@@ -99,17 +82,6 @@ public bool CanHitRow(float yPos)
     }
 public void SpawnDart()
 {
-    if (freeDarts > 0)
-    {
-        freeDarts--;  // Use a free dart
-    }
-    else
-    {
-        if (coins >= dartPrice)
-        {
-            coins -= dartPrice;  // Deduct coins for the dart
-        }
-    }
 GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quaternion.identity);
         Dart dartComponent = dart.AddComponent<Dart>();
 
@@ -117,85 +89,74 @@ GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quate
         Sprite chosenSkin = dartSkins[UnityEngine.Random.Range(0, dartSkins.Count)];
         dart.transform.GetChild(0).GetComponent<SpriteRenderer>().sprite = chosenSkin; // Assume the child is the visual part
 
-        dartComponent.Initialize(this, spawnPositionsX);
+        dartComponent.Initialize2(this, spawnPositionsX);
 }
-public void startGame(string difficulty)
+public void ShowObjective(int levelIndex)
 {
-    diff_mark = difficulty;
-    if(difficulty == "Easy")
+    if (levelIndex < icon_objectives.Length)
     {
-        gameprice = 0;
-        dartPrice = 100;
+        objectiveIcon.sprite = icon_objectives[levelIndex]; // Update the UI with the objective icon
+        currentObjectiveIcon = icon_objectives[levelIndex];  // Set the current objective
+        objectivePopup.SetActive(true);
+    }
+}
+public void startGame()
+{
         BasicGame.SetActive(true);
-        Starter.SetActive(false);
-        multiplier = 1;
         StartCoroutine(MoveTargetCircleLinear());
-    }
-    else if(difficulty == "Medium")
+}
+void LoadLevels()
+{
+    for (int i = 1; i < levelButtons.Length; i++)
     {
-        gameprice = 2500;
-        if(coins < gameprice)
+        if (PlayerPrefs.GetInt("LevelUnlocked_" + i, 0) == 1)
         {
-            Debug.Log("Not enough coins to play");
-        }
-        else
-        {
-            coins -= gameprice;
-            dartPrice = 250;
-            multiplier = 2;
-            BasicGame.SetActive(true);
-            Starter.SetActive(false);
-            StartCoroutine(MoveTargetCircleInfinity());
-        }
-    }
-    else if(difficulty == "Hard")
-    {
-        gameprice = 5000;
-        if(coins < gameprice)
-        {
-            Debug.Log("Not enough coins to play");
-        }
-        else
-        {
-            coins -= gameprice;
-            dartPrice = 500;
-            multiplier = 3;
-            BasicGame.SetActive(true);
-            Starter.SetActive(false);
-            StartCoroutine(MoveTargetCircleRandom());
+            levelButtons[i].enabled = true;
         }
     }
 }
-private void CalculateWinnings()
+
+public void ResetLevelProgress()
+{
+    for (int i = 1; i < levelButtons.Length; i++)
     {
-        Dictionary<Sprite, int> iconCount = new Dictionary<Sprite, int>();
-
-        // Count each icon
-        foreach (Sprite icon in hitIcons)
-        {
-            if (iconCount.ContainsKey(icon))
-            {
-                iconCount[icon]++;
-            }
-            else
-            {
-                iconCount.Add(icon, 1);
-            }
-        }
-
-        foreach (var pair in iconCount)
-        {
-            if (pair.Value >= 2) // At least two icons must be the same
-            {
-                int iconIndex = Array.IndexOf(icons, pair.Key);
-                winnings += iconValues[iconIndex] * pair.Value * multiplier;
-            }
-        }
-
-        result_text.text = ($"Winnings\n {winnings}");
-        coins += winnings;
-        PlayerPrefs.SetInt("Total", coins);
+        levelButtons[i].enabled = false;
+        PlayerPrefs.SetInt("LevelUnlocked_" + i, 0);
     }
+    PlayerPrefs.Save();
+}
+public void CheckLevelCompletion()
+{
+    bool allMatch = true;
+    foreach (SpriteRenderer renderer in boxRenderers)
+    {
+        if (renderer.sprite != currentObjectiveIcon)
+        {
+            result_text.text = "Level Failed\nTry again!";
+            allMatch = false;
+            break;
+        }
+    }
+
+    if (allMatch)
+    {
+        sound_effects.PlayOneShot(jingle);
+        result_text.text = "Well Done!";
+        int currentLevel = Array.IndexOf(icon_objectives, currentObjectiveIcon);
+        if (currentLevel + 1 < levelButtons.Length)
+        {
+            levelButtons[currentLevel + 1].enabled = true;
+            PlayerPrefs.SetInt("LevelUnlocked_" + (currentLevel + 1), 1);
+            PlayerPrefs.Save();
+        }
+        ShowResultsPopup(true); // Assuming a method that handles showing a success popup
+    }
+    else
+    {
+        ShowResultsPopup(false); // Assuming a method that handles showing a failure popup
+    }
+}
+
     private IEnumerator SpawnSlots(float xPos)
     {
         while (true)
@@ -207,8 +168,8 @@ private void CalculateWinnings()
             Sprite randomIcon = icons[UnityEngine.Random.Range(0, icons.Length)];
             newSlot.GetComponent<SpriteRenderer>().sprite = randomIcon;
 
-            // Add the SlotMover component to the new slot to handle movement and destruction
-            SlotMover slotMover = newSlot.AddComponent<SlotMover>();
+            // Add the SlotSpinner component to the new slot to handle movement and destruction
+            SlotSpinner slotMover = newSlot.AddComponent<SlotSpinner>();
             slotMover.Initialize(moveSpeed, destroyY, this, xPos);
             activeSlots.Add(slotMover);
 
@@ -224,37 +185,19 @@ public void StopAllSlots(float xPosition)
             StopCoroutine(spawnCoroutines[xPosition]);
             spawnCoroutines.Remove(xPosition);
         }
-    foreach (SlotMover slot in activeSlots)
+    foreach (SlotSpinner slot in activeSlots)
         {
             if (slot != null && Mathf.Approximately(slot.GetXPosition(), xPosition))
             {
                 slot.StopMoving();
             }
         }
-    hits++;  // Increment hits
-        if (hits == boxes.Length)
-        {
-            CalculateWinnings();
-            ShowResultsPopup();
-            if(diff_mark == "Easy")
-            {
-                StopCoroutine(MoveTargetCircleLinear());
-            }
-            else if(diff_mark == "Medium")
-            {
-                StopCoroutine(MoveTargetCircleInfinity());
-            }
-            else if(diff_mark == "Hard")
-            {
-                StopCoroutine(MoveTargetCircleRandom());
-            }
-        }
+    // hits++;  // Increment hits
 }
-private void ShowResultsPopup()
+private void ShowResultsPopup(bool success)
 {
     resultsPopup.SetActive(true);
     BasicGame.SetActive(false);
-    Debug.Log($"You won {winnings} coins!");
 }
 public void ProcessHitIcon(Sprite hitIcon)
 {
@@ -269,7 +212,8 @@ public void ProcessHitIcon(Sprite hitIcon)
     // Check if three icons have been hit
     if (hitIcons.Count == 3)
     {
-        ShowResultsPopup(); // Show results and end the game
+        CheckLevelCompletion();
+        ShowResultsPopup(true); // Show results and end the game
     }
 }
 
@@ -288,7 +232,7 @@ public bool CanHitIcon(Sprite icon)
     return true;  // Icon not yet displayed
 }
 
-    public void RemoveSlot(SlotMover slot)
+    public void RemoveSlot(SlotSpinner slot)
     {
         // Remove slot from the list
         if (activeSlots.Contains(slot))
@@ -296,34 +240,6 @@ public bool CanHitIcon(Sprite icon)
             activeSlots.Remove(slot);
         }
     }
-    private IEnumerator MoveTargetCircleRandom()
-{
-    while (true)
-    {
-        Vector3 newPos = new Vector3(UnityEngine.Random.Range(-2f, 2f), UnityEngine.Random.Range(-2f, 2f), 0);
-        float time = 0;
-        Vector3 startPos = targetCircle.transform.position;
-        while (time < 0.3f)
-        {
-            targetCircle.transform.position = Vector3.Lerp(startPos, newPos, time / 0.5f);
-            time += Time.deltaTime;
-            yield return null;
-        }
-        yield return new WaitForSeconds(0.01f);  // Wait for 0.5 seconds before moving again
-    }
-}
-private IEnumerator MoveTargetCircleInfinity()
-{
-    float time = 0;
-    while (true)
-    {
-        float x = Mathf.Sin(time * targetCircleSpeed) * 2f;
-        float y = Mathf.Sin(time * targetCircleSpeed) * Mathf.Cos(time * targetCircleSpeed);
-        targetCircle.transform.position = new Vector2(x, y);
-        time += Time.deltaTime;
-        yield return null;
-    }
-}
 private IEnumerator MoveTargetCircleLinear()
 {
     while (true)
@@ -350,15 +266,15 @@ private IEnumerator MoveTargetCircleLinear()
 
 }
 
-public class SlotMover : MonoBehaviour
+public class SlotSpinner : MonoBehaviour
 {
     private float moveSpeed;  // Speed at which the slot moves down
     private float destroyY;   // Y position at which the slot destroys itself
-    private DartSlot dartSlot;  // Reference to DartSlot script
+    private LevelHandle dartSlot;  // Reference to DartSlot script
     public bool isMoving = true;  // Flag to check if the slot is moving
     private float xPos;  // X position where the slot was spawned
 
-    public void Initialize(float speed, float destroyPosition, DartSlot dartSlotReference, float spawnX)
+    public void Initialize(float speed, float destroyPosition, LevelHandle dartSlotReference, float spawnX)
     {
         moveSpeed = speed;
         destroyY = destroyPosition;
