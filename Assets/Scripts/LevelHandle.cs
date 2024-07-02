@@ -97,6 +97,7 @@ public void ShowObjective(int levelIndex)
     {
         objectiveIcon.sprite = icon_objectives[levelIndex]; // Update the UI with the objective icon
         currentObjectiveIcon = icon_objectives[levelIndex];  // Set the current objective
+        Starter.SetActive(false);
         objectivePopup.SetActive(true);
     }
 }
