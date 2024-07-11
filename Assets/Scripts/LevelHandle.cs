@@ -35,7 +35,6 @@ private HashSet<float> hitRows = new HashSet<float>();
     public List<Sprite> hitIcons = new List<Sprite>();
     public Text result_text;
     public List<Sprite> dartSkins = new List<Sprite>(); // List to hold purchased dart skins
-    public Sprite defaultDartSkin; // Default dart skin
     public Button[] levelButtons;
 public Sprite[] icon_objectives;
 public GameObject objectivePopup;  // Popup that shows the level objective
@@ -43,10 +42,13 @@ public Image objectiveIcon;  // Icon displayed in the objective popup
 public Sprite currentObjectiveIcon; // Variable to hold the current level's objective icon
 public AudioSource sound_effects;
 public AudioClip jingle;
-
+public Sprite selectedSkin;
+public Sprite defaultSkin;
 private void Start()
     {
+        Time.timeScale = 1f;
         LoadPurchasedSkins();
+        LoadSelectedSkin();
         Starter.SetActive(true);
         BasicGame.SetActive(false);
         resultsPopup.SetActive(false);
@@ -58,19 +60,30 @@ private void Start()
 void LoadPurchasedSkins()
 {
     dartSkins.Clear(); // Clear to avoid duplication
-    dartSkins.Add(defaultDartSkin); // Add default first
 
     Debug.Log("Loading purchased skins, count: " + Marketplace.PurchasedSkins.Count);
 
     dartSkins.AddRange(Marketplace.PurchasedSkins);
-
-    // Debug each loaded skin
-    foreach (var skin in dartSkins)
+}
+void LoadSelectedSkin()
+{
+    string selectedSkinName = PlayerPrefs.GetString("SelectedSkin", "");
+    if (!string.IsNullOrEmpty(selectedSkinName))
     {
-        Debug.Log("Loaded skin: " + skin.name);
+        foreach (var item in Marketplace.Instance.ShopItemList)
+        {
+            if (item.name == selectedSkinName && item.isAvailable)
+            {
+                selectedSkin = item.Image;
+                break;
+            }
+        }
+    }
+    else
+    {
+        selectedSkin = defaultSkin;
     }
 }
-
 public bool CanHitRow(float yPos)
     {
         return !hitRows.Contains(yPos);
@@ -82,15 +95,25 @@ public bool CanHitRow(float yPos)
     }
 public void SpawnDart()
 {
-GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quaternion.identity);
-        Dart dartComponent = dart.AddComponent<Dart>();
+    GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quaternion.identity);
+    Dart dartComponent = dart.AddComponent<Dart>();
 
-        // Randomly choose a skin from the available skins
-        Sprite chosenSkin = dartSkins[UnityEngine.Random.Range(0, dartSkins.Count)];
-        dart.transform.GetChild(0).GetComponent<SpriteRenderer>().sprite = chosenSkin; // Assume the child is the visual part
+    // Use the selected skin if available, otherwise use default
+    SpriteRenderer dartRenderer = dart.transform.GetChild(0).GetComponent<SpriteRenderer>();
+    dartRenderer.sprite = selectedSkin;
 
-        dartComponent.Initialize2(this, spawnPositionsX);
+    dartComponent.Initialize2(this, spawnPositionsX);
+    if (selectedSkin != null)
+    {
+        dartRenderer.sprite = selectedSkin;
+    }
+    else
+    {
+        Debug.LogWarning("No skin selected, using default settings.");
+        // Optionally apply a default sprite or handle this case as needed
+    }
 }
+
 public void ShowObjective(int levelIndex)
 {
     if (levelIndex < icon_objectives.Length)
@@ -199,6 +222,7 @@ private void ShowResultsPopup(bool success)
 {
     resultsPopup.SetActive(true);
     BasicGame.SetActive(false);
+    Time.timeScale = 0f;
 }
 public void ProcessHitIcon(Sprite hitIcon)
 {

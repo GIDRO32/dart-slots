@@ -14,7 +14,6 @@ public class SceneHandler : MonoBehaviour
     {
         slider.SetActive(false);
     }
-
 IEnumerator LoadSceneAsync()
     {
         AsyncOperation operation = SceneManager.LoadSceneAsync(scene_tag);
@@ -26,11 +25,18 @@ IEnumerator LoadSceneAsync()
             yield return null;
         }
     }
-
     public void LoadScene(string scene)
     {
         scene_tag = scene;
         slider.SetActive(true);
         StartCoroutine(LoadSceneAsync());
+    }
+    public void StopTime()
+    {
+        Time.timeScale = 0f;
+    }
+    public void ResumeTime()
+    {
+        Time.timeScale = 1f;
     }
 }

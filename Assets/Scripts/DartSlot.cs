@@ -44,11 +44,13 @@ private HashSet<float> hitRows = new HashSet<float>();
     public List<Sprite> hitIcons = new List<Sprite>();
     public Text result_text;
     public List<Sprite> dartSkins = new List<Sprite>(); // List to hold purchased dart skins
-    public Sprite defaultDartSkin; // Default dart skin
-
+    public Sprite selectedSkin;
+    public Sprite defaultSkin;
 private void Start()
     {
+        Time.timeScale = 1f;
         LoadPurchasedSkins();
+        LoadSelectedSkin();
         Starter.SetActive(true);
         BasicGame.SetActive(false);
         resultsPopup.SetActive(false);
@@ -72,10 +74,10 @@ private void Start()
             ShowResultsPopup();
         }
     }
+
 void LoadPurchasedSkins()
 {
     dartSkins.Clear(); // Clear to avoid duplication
-    dartSkins.Add(defaultDartSkin); // Add default first
 
     Debug.Log("Loading purchased skins, count: " + Marketplace.PurchasedSkins.Count);
 
@@ -87,7 +89,6 @@ void LoadPurchasedSkins()
         Debug.Log("Loaded skin: " + skin.name);
     }
 }
-
 public bool CanHitRow(float yPos)
     {
         return !hitRows.Contains(yPos);
@@ -97,28 +98,53 @@ public bool CanHitRow(float yPos)
     {
         hitRows.Add(yPos);
     }
+void LoadSelectedSkin()
+{
+    string selectedSkinName = PlayerPrefs.GetString("SelectedSkin", "");
+    if (!string.IsNullOrEmpty(selectedSkinName))
+    {
+        foreach (var item in Marketplace.Instance.ShopItemList)
+        {
+            if (item.name == selectedSkinName && item.isAvailable)
+            {
+                selectedSkin = item.Image;
+                break;
+            }
+        }
+    }
+    else
+    {
+        selectedSkin = defaultSkin;
+    }
+}
+
 public void SpawnDart()
 {
     if (freeDarts > 0)
     {
         freeDarts--;  // Use a free dart
     }
+    else if (coins >= dartPrice)
+    {
+        coins -= dartPrice;  // Deduct coins for the dart
+    }
     else
     {
-        if (coins >= dartPrice)
-        {
-            coins -= dartPrice;  // Deduct coins for the dart
-        }
+        return;  // Not enough resources to throw a dart
     }
-GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quaternion.identity);
-        Dart dartComponent = dart.AddComponent<Dart>();
 
-        // Randomly choose a skin from the available skins
-        Sprite chosenSkin = dartSkins[UnityEngine.Random.Range(0, dartSkins.Count)];
-        dart.transform.GetChild(0).GetComponent<SpriteRenderer>().sprite = chosenSkin; // Assume the child is the visual part
+    GameObject dart = Instantiate(dartPrefab, targetCircle.transform.position, Quaternion.identity);
+    Dart dartComponent = dart.AddComponent<Dart>();
 
-        dartComponent.Initialize(this, spawnPositionsX);
+    // Apply the selected skin
+    if (selectedSkin != null)
+    {
+        dart.transform.GetChild(0).GetComponent<SpriteRenderer>().sprite = selectedSkin;
+    }
+
+    dartComponent.Initialize(this, spawnPositionsX);
 }
+
 public void startGame(string difficulty)
 {
     diff_mark = difficulty;
@@ -255,6 +281,7 @@ private void ShowResultsPopup()
     resultsPopup.SetActive(true);
     BasicGame.SetActive(false);
     Debug.Log($"You won {winnings} coins!");
+    Time.timeScale = 0f;
 }
 public void ProcessHitIcon(Sprite hitIcon)
 {

@@ -11,22 +11,30 @@ public class Marketplace : MonoBehaviour
     public AudioSource Sounds;
     public AudioClip Purchase;
     public AudioClip NoBuy;
-    void Awake()
+    public AudioClip Choose;
+    public List<ShopItem> ShopItemList = new List<ShopItem>();
+void Awake()
     {
-        if(Instance == null)
-        Instance = this;
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
         else
-        Destroy(gameObject);
+        {
+            Destroy(gameObject);
+        }
     }
     #endregion
     [System.Serializable]
     public class ShopItem
 {
+    public string name;
     public Sprite Image;
     public int price;
     public bool isAvailable = false;
+    public bool isSelected = false;  // Track if the item is currently selected
 }
-    public List<ShopItem> ShopItemList;
     public static List<Sprite> PurchasedSkins = new List<Sprite>();
     [SerializeField]GameObject ItemTemplate;
     GameObject g;
@@ -35,25 +43,40 @@ public class Marketplace : MonoBehaviour
     [SerializeField] Text Balance;
     Button buyBtn;
     public GameObject NE_Message;
+    public static Sprite selectedSkin;
 void Start()
 {
-    LoadItemAvailability();
     NE_Message.SetActive(false);
-    int len = ShopItemList.Count;
-    for (int i = 0; i < len; i++)
+    LoadItemAvailability();
+    // Ensure the first item is always available
+    if (ShopItemList.Count > 0) {
+        ShopItemList[0].isAvailable = true;
+    }
+    // Set up UI for each item
+    foreach (var item in ShopItemList)
     {
-        g = Instantiate(ItemTemplate, StoreSurf);
-        g.transform.GetChild(1).GetComponent<Image>().sprite = ShopItemList[i].Image; // Frame
-        g.transform.GetChild(2).GetComponent<Text>().text = ShopItemList[i].price.ToString(); // Price
-        buyBtn = g.transform.GetChild(3).GetComponent<Button>(); // Buy button
-        if (ShopItemList[i].isAvailable)
-        {
-            DisableBuyButton(buyBtn);
-        }
-        else
-        {
-            buyBtn.AddEventListener(i, OnBuyBtnClicked);
-        }
+        GameObject g = Instantiate(ItemTemplate, StoreSurf);
+        SetupItemButton(g, item);
+        UpdateItemUI(g, item);
+    }
+}
+void SetupItemButton(GameObject itemGameObject, ShopItem item)
+{
+    Button itemButton = itemGameObject.GetComponent<Button>();
+    if (itemButton != null)
+    {
+        itemButton.onClick.RemoveAllListeners();  // Clear existing listeners
+        itemButton.onClick.AddListener(() => {
+            if (item.isAvailable) {
+                SelectItem(item);  // Select item if it is available
+            } else {
+                PurchaseItem(item);  // Purchase item if it is not yet available
+            }
+        });
+    }
+    else
+    {
+        Debug.LogError("Button component is missing on the item prefab.");
     }
 }
 
@@ -65,7 +88,7 @@ void Start()
             }
             NE_Message.SetActive(false);
     }
-void LoadItemAvailability()
+public void LoadItemAvailability()
 {
     Debug.Log("Loading item availability...");
     PurchasedSkins.Clear(); // Clear the list to avoid duplicating skins on multiple calls.
@@ -73,7 +96,6 @@ void LoadItemAvailability()
     {
         bool isAvailable = PlayerPrefs.GetInt("ItemAvailable_" + i, 0) == 1;
         ShopItemList[i].isAvailable = isAvailable;
-        Debug.Log($"Item {i}: {ShopItemList[i].Image.name}, Available: {isAvailable}");
 
         // If the item is marked as available, add its sprite to the PurchasedSkins list
         if (isAvailable)
@@ -85,23 +107,81 @@ void LoadItemAvailability()
         }
     }
 }
-
-
-void OnBuyBtnClicked(int itemIndex)
+void UpdateItemUI(GameObject itemGameObject, ShopItem item)
 {
-    if (Product.Instance.HasEnoughCoins(ShopItemList[itemIndex].price))
+    if (itemGameObject != null)
     {
-        Product.Instance.UseCoins(ShopItemList[itemIndex].price);
-        ShopItemList[itemIndex].isAvailable = true;
-        PlayerPrefs.SetInt("ItemAvailable_" + itemIndex, 1); // Save item as available
+        // Set the icon
+        Image iconImage = itemGameObject.transform.GetChild(0).GetComponent<Image>();
+        if (iconImage != null)
+        {
+            iconImage.sprite = item.Image; // Assign the icon sprite
+        }
+        else
+        {
+            Debug.LogError("Icon Image component is missing on the item prefab.");
+        }
 
-        // Debugging the skin added
-        Debug.Log("Adding skin to PurchasedSkins: " + ShopItemList[itemIndex].Image.name);
+        // Handling the visibility and text of NotBought and Bought buttons
+        GameObject notBoughtButton = itemGameObject.transform.GetChild(1).gameObject;
+        Text priceText = itemGameObject.transform.GetChild(1).GetChild(1).GetComponent<Text>(); // Assuming this is the correct child index for the price text
 
-        PurchasedSkins.Add(ShopItemList[itemIndex].Image); // Assuming this is a Sprite
+        if (notBoughtButton != null && priceText != null)
+        {
+            notBoughtButton.SetActive(!item.isAvailable);
+            priceText.text = item.price.ToString(); // Set the price
+        }
+        else
+        {
+            Debug.LogError("NotBoughtButton or Price Text is missing or not accessible in the prefab structure.");
+        }
+
+        // Adjust visibility based on purchase state
+        GameObject boughtButton = itemGameObject.transform.GetChild(2).gameObject;
+        if (boughtButton != null)
+        {
+            boughtButton.SetActive(item.isAvailable);
+        }
+        else
+        {
+            Debug.LogError("BoughtButton is missing in the prefab structure.");
+        }
+        
+        // Update select indicators within the BoughtButton
+        UpdateSelectIndicators(boughtButton, item);
+    }
+    else
+    {
+        Debug.LogError("Item GameObject is null.");
+    }
+}
+
+void UpdateSelectIndicators(GameObject boughtButton, ShopItem item)
+{
+    if (boughtButton != null)
+    {
+        GameObject select = boughtButton.transform.GetChild(0).gameObject;
+        GameObject selected = boughtButton.transform.GetChild(1).gameObject;
+        if (select != null && selected != null)
+        {
+            select.SetActive(item.isAvailable && !item.isSelected);
+            selected.SetActive(item.isSelected);
+        }
+        else
+        {
+            Debug.LogError("Select or Selected GameObjects are missing in the BoughtButton structure.");
+        }
+    }
+}
+
+public void PurchaseItem(ShopItem item)
+{
+    if (Product.Instance.HasEnoughCoins(item.price))
+    {
+        Product.Instance.UseCoins(item.price);
+        item.isAvailable = true;
+        PlayerPrefs.SetInt("ItemAvailable_" + ShopItemList.IndexOf(item), 1);
         PlayerPrefs.Save();
-
-        UpdateShopUI();
         Sounds.PlayOneShot(Purchase);
     }
     else
@@ -110,24 +190,37 @@ void OnBuyBtnClicked(int itemIndex)
         StartCoroutine("MessageHang");
         Sounds.PlayOneShot(NoBuy);
     }
-}
 
-void UpdateShopUI()
+    UpdateShopUI();  // Refresh the UI for all items
+}
+void SelectItem(ShopItem selectedItem)
 {
-    for (int i = 0; i < ShopItemList.Count; i++)
+    foreach (var item in ShopItemList)
     {
-        Transform itemTransform = StoreSurf.GetChild(i);
-        Button buyButton = itemTransform.GetChild(3).GetComponent<Button>();  // Make sure index is correct
-        if (ShopItemList[i].isAvailable)
-        {
-            buyButton.interactable = false;
-            buyButton.transform.GetChild(0).GetComponent<Text>().text = "Owned";
-        }
-        else
-        {
-            buyButton.interactable = true;
-            buyButton.transform.GetChild(0).GetComponent<Text>().text = "Buy";
-        }
+        item.isSelected = false;  // Deselect all items
+    }
+    Sounds.PlayOneShot(Choose);
+    PlayerPrefs.SetString("SelectedSkin", selectedItem.name);
+    selectedItem.isSelected = true;  // Select the clicked item
+    selectedSkin = selectedItem.Image; // Update the selected skin to use in the game
+    PlayerPrefs.Save();
+
+    UpdateShopUI();  // Refresh the UI for all items
+}
+public void UpdateShopUI()
+{
+    foreach (var item in ShopItemList)
+    {
+        int index = ShopItemList.IndexOf(item);
+        GameObject itemGameObject = StoreSurf.GetChild(index).gameObject;
+
+        // Set UI elements based on item state
+        itemGameObject.transform.GetChild(1).gameObject.SetActive(!item.isAvailable); // NotBoughtButton
+        itemGameObject.transform.GetChild(2).gameObject.SetActive(item.isAvailable); // BoughtButton
+
+        // Set selection state
+        itemGameObject.transform.GetChild(2).GetChild(1).gameObject.SetActive(item.isSelected); // Selected
+        itemGameObject.transform.GetChild(2).GetChild(0).gameObject.SetActive(item.isAvailable && !item.isSelected); // Select
     }
 }
 
@@ -135,26 +228,18 @@ public void ResetPurchases()
 {
     for (int i = 0; i < ShopItemList.Count; i++)
     {
-        ShopItemList[i].isAvailable = false;
-        PlayerPrefs.SetInt("ItemAvailable_" + i, 0);
-
-        // Ensure the transform child exists before trying to access it
-        if (i < StoreSurf.childCount)
-        {
-            Transform itemTransform = StoreSurf.GetChild(i);
-            Button buyButton = itemTransform.GetChild(3).GetComponent<Button>();  // Ensure the button is at index 3
-            if (buyButton != null)
-            {
-                buyButton.interactable = true;
-                buyButton.transform.GetChild(0).GetComponent<Text>().text = "Buy";
-            }
+        if (i != 0) {  // Skip the first item
+            ShopItemList[i].isAvailable = false;
+            ShopItemList[i].isSelected = false;
+            PlayerPrefs.SetInt("ItemAvailable_" + i, 0);
         }
     }
-
-    PlayerPrefs.SetInt("Total", 2000); // Resetting the coin balance
+    PlayerPrefs.SetInt("Total",2000);
+    PlayerPrefs.SetInt("ItemAvailable_0", 1);  // Ensure first item is available
     PlayerPrefs.Save();
-    // UpdateShopUI(); // Refresh the UI to reflect the changes
+    UpdateShopUI();  // Refresh the UI
 }
+
 
 
 
